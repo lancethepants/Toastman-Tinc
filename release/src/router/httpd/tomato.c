@@ -574,6 +574,9 @@ static const nvset_t nvset_list[] = {
 	{ "lan_netmask",		V_IP				},
 	{ "lan_gateway",		V_IP				},
 	{ "wan_dns",			V_LENGTH(0, 50)		},	// ip ip ip
+#ifdef TCONFIG_DNSSEC
+	{ "dnssec_enable",		V_01				},
+#endif
 	{ "lan_proto",			V_WORD				},	// static, dhcp
 	{ "dhcp_start",			V_LENGTH(0, 15)		},	// remove !
 	{ "dhcp_num",			V_LENGTH(0, 4)		},	// remove !

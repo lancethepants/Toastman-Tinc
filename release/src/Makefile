@@ -50,6 +50,7 @@ VLAN ?= "n"
 USERPPTP ?= "n"
 PPTPD ?= "n"
 TCPDUMP ?= "n"
+DNSSEC ?= "n"
 
 ifeq ($(NVRAM_SIZE),)
 NVRAM_SIZE = 0
@@ -470,6 +471,10 @@ define RouterOptions
 	if [ "$(TCPDUMP)" = "y" ]; then \
 		sed -i "/TCONFIG_TCPDUMP/d" $(1); \
 		echo "TCONFIG_TCPDUMP=y" >>$(1); \
+	fi; \
+	if [ "$(DNSSEC)" = "y" ]; then \
+		sed -i "/TCONFIG_DNSSEC/d" $(1); \
+		echo "TCONFIG_DNSSEC=y" >>$(1); \
 	fi; \
 	)
 endef

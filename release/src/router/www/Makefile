@@ -216,6 +216,12 @@ ifneq ($(TCONFIG_SNMP),y)
 	sed -i $(INSTALLDIR)/www/about.asp -e "/SNMP-BEGIN/,/SNMP-END/d"
 endif
 
+# Only include the dnssec option if is compiled in
+ifneq ($(TCONFIG_DNSSEC),y)
+	sed -i $(INSTALLDIR)/www/basic-network.asp -e "/DNSSEC-BEGIN/,/DNSSEC-END/d"
+	sed -i $(INSTALLDIR)/www/about.asp -e "/LANCETHEPANTS-BEGIN/,/LANCETHEPANTS-END/d"
+endif
+
 # clean up
 	cd $(INSTALLDIR)/www && \
 	for F in $(wildcard *.asp *.js *.jsx *.html); do \

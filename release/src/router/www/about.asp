@@ -158,6 +158,13 @@ Copyright (C) 2010-2011 Jean-Yves Avenard<br>
 <a href='mailto:jean-yves@avenard.org'>jean-yves@avenard.org</a><br>
 <br>
 <!-- JYAVENARD-END -->
+<!-- LANCETHEPANTS-BEGIN -->
+<b>"Lancethepants" Features:</b><br>
+- DNSSEC integration and GUI<br>
+Copyright (C) 2014 Lance Fredrickson<br>
+<a href='mailto:lancethepants@gmail.com'>lancethepants@gmail.com</a><br>
+<br>
+<!-- LANCETHEPANTS-END -->
 <b>"Teaman" Features:</b><br>
 - QOS-detailed & ctrate improved filters<br>
 - Real-time bandwidth monitoring of LAN clients<br>

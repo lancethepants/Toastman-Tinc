@@ -371,6 +371,14 @@ void start_dnsmasq()
 		fprintf(f, "dhcp-authoritative\n");
 	}
 
+#ifdef TCONFIG_DNSSEC
+	if (nvram_match("dnssec_enable", "1")) {
+		fprintf(f, "conf-file=/etc/trust-anchors.conf\n"
+			   "dnssec\n"
+			   "dnssec-no-timecheck\n");
+	}
+#endif
+
 	//
 
 #ifdef TCONFIG_OPENVPN
@@ -431,6 +439,13 @@ void start_dnsmasq()
 	}
 
 	TRACE_PT("end\n");
+
+#ifdef TCONFIG_DNSSEC
+	if ((time(0) > Y2K) && nvram_match("dnssec_enable", "1")){
+		killall("dnsmasq", SIGHUP);
+	}
+#endif
+
 }
 
 void stop_dnsmasq(void)
