@@ -51,6 +51,7 @@ USERPPTP ?= "n"
 PPTPD ?= "n"
 TCPDUMP ?= "n"
 DNSSEC ?= "n"
+TINC ?= "n"
 
 ifeq ($(NVRAM_SIZE),)
 NVRAM_SIZE = 0
@@ -475,6 +476,10 @@ define RouterOptions
 	if [ "$(DNSSEC)" = "y" ]; then \
 		sed -i "/TCONFIG_DNSSEC/d" $(1); \
 		echo "TCONFIG_DNSSEC=y" >>$(1); \
+	fi; \
+	if [ "$(TINC)" = "y" ]; then \
+		sed -i "/TCONFIG_TINC/d" $(1); \
+		echo "TCONFIG_TINC=y" >>$(1); \
 	fi; \
 	)
 endef

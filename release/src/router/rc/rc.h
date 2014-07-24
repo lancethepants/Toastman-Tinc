@@ -483,6 +483,14 @@ static inline void stop_vpn_eas() { }
 #define write_vpn_resolv(f) (0)
 #endif
 
+// tinc.c
+#ifdef TCONFIG_TINC
+extern void start_tinc();
+extern void start_tinc_wanup();
+extern void stop_tinc();
+extern void run_tinc_firewall_script();
+#endif
+
 // qoslimit.c
 extern void ipt_qoslimit(int chain);
 extern void start_qoslimit(void);

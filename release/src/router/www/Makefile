@@ -219,7 +219,14 @@ endif
 # Only include the dnssec option if is compiled in
 ifneq ($(TCONFIG_DNSSEC),y)
 	sed -i $(INSTALLDIR)/www/basic-network.asp -e "/DNSSEC-BEGIN/,/DNSSEC-END/d"
-	sed -i $(INSTALLDIR)/www/about.asp -e "/LANCETHEPANTS-BEGIN/,/LANCETHEPANTS-END/d"
+	sed -i $(INSTALLDIR)/www/about.asp -e "/DNSSEC-BEGIN/,/DNSSEC-END/d"
+endif
+
+# Only include the Tinc page if it is compiled in
+ifneq ($(TCONFIG_TINC),y)
+	rm -f $(INSTALLDIR)/www/vpn-tinc.asp
+	sed -i $(INSTALLDIR)/www/tomato.js -e "/TINC-BEGIN/,/TINC-END/d"
+	sed -i $(INSTALLDIR)/www/about.asp -e "/TINC-BEGIN/,/TINC-END/d"
 endif
 
 # clean up
@@ -249,6 +256,7 @@ endif
 		-e "/SNMP-BEGIN/d"	-e "/SNMP_END/d"\
 		-e "/ VLAN-BEGIN/d"	-e "/ VLAN-END/d" \
 		-e "/ NOVLAN-BEGIN/d"	-e "/ NOVLAN-END/d" \
+		-e "/TINC-BEGIN/d"	-e "/TINC-END/d"\
 		|| true; \
 	done
 
