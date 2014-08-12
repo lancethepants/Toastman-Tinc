@@ -275,7 +275,7 @@ void run_tinc_firewall_script(void){
 	if ((fp = fopen( "/etc/tinc/tinc-fw.sh", "r" ))){
 
 		fclose(fp);
-		system( "etc/tinc/tinc-fw.sh" );
+		system( "/etc/tinc/tinc-fw.sh" );
 	}
 
 	return;

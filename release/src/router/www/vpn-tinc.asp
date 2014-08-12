@@ -96,7 +96,6 @@ th.dataToView = function(data) {
 }
 
 th.fieldValuesToData = function(row) {
-	changed = 1;
 	var f = fields.getAll(row);
 	return [f[0].checked ? 1 : 0, f[1].value, f[2].value, f[3].value, f[4].value, f[5].value, _host_rsa_key.value, _host_ecdsa_key.value, _host_custom.value ];
 }
@@ -405,6 +404,16 @@ function tabSelect(name)
 
 function toggle(service, isup)
 {
+
+	var data = th.getAllData();
+	var s = '';
+	for (var i = 0; i < data.length; ++i) {
+		s += data[i].join('<') + '>';
+	}
+
+	if (nvram.tinc_hosts != s)
+		changed = 1;
+
 	if (changed) {
 		if (!confirm("Unsaved changes will be lost. Continue anyway?")) return;
 	}
@@ -438,6 +447,8 @@ function save()
 	{
 		fom._service.value = 'tinc-restart';
 	}
+
+	changed = 0;
 
 	form.submit(fom, 1);
 }
