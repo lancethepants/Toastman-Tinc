@@ -56,7 +56,7 @@ textarea
 
 <script type='text/javascript'>
 
-//	<% nvram("tinc_wanup,tinc_name,tinc_devicetype,tinc_mode,tinc_vpn_netmask,tinc_private_rsa,tinc_private_ecdsa,tinc_custom,tinc_hosts,tinc_manual_firewall,tinc_manual_tinc_up,tinc_tinc_up,tinc_tinc_down,tinc_host_up,tinc_host_down,tinc_subnet_up,tinc_subnet_down"); %>
+//	<% nvram("tinc_wanup,tinc_name,tinc_devicetype,tinc_mode,tinc_vpn_netmask,tinc_private_rsa,tinc_private_ecdsa,tinc_custom,tinc_hosts,tinc_firewall,tinc_manual_firewall,tinc_manual_tinc_up,tinc_tinc_up,tinc_tinc_down,tinc_host_up,tinc_host_down,tinc_subnet_up,tinc_subnet_down"); %>
 
 var tinc_compression = [['0','0 - None'],['1','1 - Fast zlib'],['2','2'],['3','3'],['4','4'],['5','5'],['6','6'],['7','7'],['8','8'],['9','9 - Best zlib'],['10','10 - Fast lzo'],['11','11 - Best lzo']];
 var th = new TomatoGrid();
@@ -188,6 +188,15 @@ function verifyFields(focused, quiet)
 		break;
 	}
 
+	switch(E('_tinc_manual_firewall').value) {
+		case '0' :
+			E('_tinc_firewall').disabled = 1 ;
+		break;
+		default :
+			E('_tinc_firewall').disabled = 0 ;
+		break;
+        }
+
 	for (a in vis) {
 		b = E(a);
 		c = vis[a];
@@ -203,16 +212,16 @@ function verifyFields(focused, quiet)
 	E('hostselect').disabled = !tincup;
 
 	// Element Verification
-	if (E('_tinc_name').value == "") {
-		ferror.set(E('_tinc_name'), "Host Name is required.", quiet); return 0 ; }
+	if (E('_tinc_name').value == "" && E('_f_tinc_wanup').checked) {
+		ferror.set(E('_tinc_name'), "Host Name is required when 'Start With WAN' is checked.", quiet); return 0 ; }
 	else {  ferror.clear(E('_tinc_name')) }
 
-	if (E('_tinc_private_rsa').value == "") {
-		ferror.set(E('_tinc_private_rsa'), "RSA Private Key is required.", quiet); return 0 ; }
+	if (E('_tinc_private_rsa').value == "" && E('_tinc_custom').value == "" && E('_f_tinc_wanup').checked) {
+		ferror.set(E('_tinc_private_rsa'), "RSA Private Key is required when 'Start With WAN' is checked.", quiet); return 0 ; }
 	else {  ferror.clear(E('_tinc_private_rsa')) }
 
-	if (E('_tinc_private_ecdsa').value == "") {
-		ferror.set(E('_tinc_private_ecdsa'), "ECDSA Private Key is required.", quiet); return 0 ; }
+	if (E('_tinc_private_ecdsa').value == "" && E('_tinc_custom').value == "" && E('_f_tinc_wanup').checked) {
+		ferror.set(E('_tinc_private_ecdsa'), "ECDSA Private Key is required when 'Start With WAN' is checked.", quiet); return 0 ; }
 	else {  ferror.clear(E('_tinc_private_ecdsa')) }
 
 	if (!v_netmask('_tinc_vpn_netmask', quiet)) return 0;
@@ -232,8 +241,8 @@ function verifyFields(focused, quiet)
 		}
 	}
 
-	if (!hostdefined) {
-		ferror.set(E('_tinc_name'), "Host Name \"" + E('_tinc_name').value + "\" is not defined in hosts area.", quiet); return 0 ; }
+	if (!hostdefined && E('_f_tinc_wanup').checked) {
+		ferror.set(E('_tinc_name'), "Host Name \"" + E('_tinc_name').value + "\" must be defined in the hosts area when 'Start With WAN' is checked.", quiet); return 0 ; }
 	else {  ferror.clear(E('_tinc_name')) };
 
 	return 1;
@@ -555,7 +564,6 @@ function toggleVisibility(whichone) {
 		{ title: 'Mode', name: 'tinc_mode', type: 'select', options: [['switch','Switch'],['hub','Hub']], value: nvram.tinc_mode },
 		{ title: 'VPN Netmask', name: 'tinc_vpn_netmask', type: 'text', maxlen: 15, size: 25, value: nvram.tinc_vpn_netmask,  suffix: ' <small>The netmask for the entire VPN network.</small>' },
 		{ title: 'Host Name', name: 'tinc_name', type: 'text', maxlen: 30, size: 25, value: nvram.tinc_name, suffix: ' <small>Must also be defined in the \'Hosts\' area.</small>' },
-		{ title: 'Firewall', name: 'tinc_manual_firewall', type: 'select', options: [['0','Automatic'],['1','Manual']], value: nvram.tinc_manual_firewall },
 		{ title: 'RSA Private Key', name: 'tinc_private_rsa', type: 'textarea', value: nvram.tinc_private_rsa },
 		{ title: 'ECDSA Private Key', name: 'tinc_private_ecdsa', type: 'textarea', value: nvram.tinc_private_ecdsa },
 		{ title: 'Custom', name: 'tinc_custom', type: 'textarea', value: nvram.tinc_custom }
@@ -614,6 +622,8 @@ function toggleVisibility(whichone) {
 	W('<div class=\'section\'>');
 
 	createFieldTable('', [
+		{ title: 'Firewall Rules', name: 'tinc_manual_firewall', type: 'select', options: [['0','Automatic'],['1','Additional'],['2','Manual']], value: nvram.tinc_manual_firewall },
+		{ title: 'Firewall', name: 'tinc_firewall', type: 'textarea', value: nvram.tinc_firewall },
 		{ title: 'tinc-up creation', name: 'tinc_manual_tinc_up', type: 'select', options: [['0','Automatic'],['1','Manual']], value: nvram.tinc_manual_tinc_up },
 		{ title: 'tinc-up', name: 'tinc_tinc_up', type: 'textarea', value: nvram.tinc_tinc_up },
 		{ title: 'tinc-down', name: 'tinc_tinc_down', type: 'textarea', value: nvram.tinc_tinc_down },
