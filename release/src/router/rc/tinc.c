@@ -140,19 +140,20 @@ void start_tinc(void)
 			fclose(hp);
 			chmod("/etc/tinc/tinc-up", 0744);
 
-			// Create firewall script if manual firewall is not enabled.
-			if ( !nvram_match("tinc_manual_firewall", "1") ){
+			// Create firewall script.
+			if ( !( hp = fopen( "/etc/tinc/tinc-fw.sh", "w" ))){
+				perror( "/etc/tinc/tinc-fw.sh" );
+				return;
+			}
 
-				if ( !( hp = fopen( "/etc/tinc/tinc-fw.sh", "w" ))){
-					perror( "/etc/tinc/tinc-fw.sh" );
-					return;
-				}
+			fprintf(hp, "#!/bin/sh\n" );
+
+			if ( !nvram_match("tinc_manual_firewall", "2") ){
 
 				if ( strcmp( port, "") == 0 )
 					port = "655";
 
-				fprintf(hp, "#!/bin/sh\n" );
-
+				fprintf(hp, "\n" );
 				fprintf(hp, "iptables -t nat -I PREROUTING -p udp --dport %s -j ACCEPT\n", port );
 				fprintf(hp, "iptables -t nat -I PREROUTING -p tcp --dport %s -j ACCEPT\n", port );
 
@@ -175,10 +176,17 @@ void start_tinc(void)
 					fprintf(hp, "ip6tables -I FORWARD -i tinc -j ACCEPT\n" );
 				}
 #endif
-
-				fclose(hp);
-				chmod("/etc/tinc/tinc-fw.sh", 0744);
 			}
+
+			if ( !nvram_match("tinc_manual_firewall", "0") ){
+
+				fprintf(hp, "\n" );
+				fprintf(hp, "%s\n", nvram_safe_get("tinc_firewall") );
+
+			}
+
+			fclose(hp);
+			chmod("/etc/tinc/tinc-fw.sh", 0744);
 		}
 	}
 
