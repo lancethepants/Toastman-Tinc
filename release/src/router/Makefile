@@ -661,9 +661,9 @@ openssl-install: openssl
 	$(STRIP) $(INSTALLDIR)/openssl/usr/lib/libcrypto.so.1.0.0
 	cd $(INSTALLDIR)/openssl/usr/lib && ln -sf libcrypto.so.1.0.0 libcrypto.so
 
-	install -D openssl/apps/openssl $(INSTALLDIR)/openssl/usr/sbin/openssl
-	$(STRIP) $(INSTALLDIR)/openssl/usr/sbin/openssl
-	chmod 0500 $(INSTALLDIR)/openssl/usr/sbin/openssl
+#	install -D openssl/apps/openssl $(INSTALLDIR)/openssl/usr/sbin/openssl
+#	$(STRIP) $(INSTALLDIR)/openssl/usr/sbin/openssl
+#	chmod 0500 $(INSTALLDIR)/openssl/usr/sbin/openssl
 
 	install -D -m 0500 httpd/gencert.sh $(INSTALLDIR)/openssl/usr/sbin/gencert.sh
 
