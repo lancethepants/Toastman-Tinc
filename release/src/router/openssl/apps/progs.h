@@ -94,12 +94,12 @@ FUNCTION functions[] = {
 	{FUNC_TYPE_CIPHER,"aes-256-ecb",enc_main},
 #endif
 
+#if 0
+
 #ifndef OPENSSL_NO_SPEED
 	{FUNC_TYPE_GENERAL,"speed",speed_main},
 #endif
 	{FUNC_TYPE_GENERAL,"version",version_main},
-
-#if 0
 
 	{FUNC_TYPE_GENERAL,"verify",verify_main},
 	{FUNC_TYPE_GENERAL,"asn1parse",asn1parse_main},
