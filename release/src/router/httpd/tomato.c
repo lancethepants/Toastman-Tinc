@@ -1329,7 +1329,7 @@ static const nvset_t nvset_list[] = {
 	{"tinc_mode",			V_TEXT(3, 6)		}, // switch, hub
 	{"tinc_vpn_netmask",		V_IP			},
 	{"tinc_private_rsa",		V_NONE			},
-	{"tinc_private_ecdsa",		V_NONE			},
+	{"tinc_private_ed25519",	V_NONE			},
 	{"tinc_custom",			V_NONE			},
 	{"tinc_hosts",			V_NONE			},
 	{"tinc_manual_firewall",	V_RANGE(0, 2)		},
