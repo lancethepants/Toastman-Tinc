@@ -38,17 +38,18 @@
 #if defined(ENABLE_SSL) && defined(ENABLE_CRYPTO_POLARSSL)
 
 #include "ssl_verify.h"
+#include <polarssl/error.h>
+#include <polarssl/bignum.h>
 #include <polarssl/sha1.h>
 
 #define MAX_SUBJECT_LENGTH 256
 
 int
 verify_callback (void *session_obj, x509_cert *cert, int cert_depth,
-    int preverify_ok)
+    int *flags)
 {
   struct tls_session *session = (struct tls_session *) session_obj;
   struct gc_arena gc = gc_new();
-  int ret = 1;
 
   ASSERT (cert);
   ASSERT (session);
@@ -59,31 +60,29 @@ verify_callback (void *session_obj, x509_cert *cert, int cert_depth,
   cert_hash_remember (session, cert_depth, x509_get_sha1_hash(cert, &gc));
 
   /* did peer present cert which was signed by our root cert? */
-  if (!preverify_ok)
+  if (*flags != 0)
     {
       char *subject = x509_get_subject(cert, &gc);
 
       if (subject)
-	msg (D_TLS_ERRORS, "VERIFY ERROR: depth=%d, %s", cert_depth, subject);
+	msg (D_TLS_ERRORS, "VERIFY ERROR: depth=%d, flags=%x, %s", cert_depth, *flags, subject);
       else
-	msg (D_TLS_ERRORS, "VERIFY ERROR: depth=%d, could not extract X509 "
-	      "subject string from certificate", cert_depth);
+	msg (D_TLS_ERRORS, "VERIFY ERROR: depth=%d, flags=%x, could not extract X509 "
+	      "subject string from certificate", *flags, cert_depth);
 
-      goto cleanup;
+      /* Leave flags set to non-zero to indicate that the cert is not ok */
+    }
+  else if (SUCCESS != verify_cert(session, cert, cert_depth))
+    {
+      *flags |= BADCERT_OTHER;
     }
 
-  if (SUCCESS != verify_cert(session, cert, cert_depth))
-    goto cleanup;
-
-  ret = 0;
-
-cleanup:
   gc_free(&gc);
 
   /*
-   * PolarSSL expects 1 on failure, 0 on success
+   * PolarSSL-1.2.0+ expects 0 on anything except fatal errors.
    */
-  return ret;
+  return 0;
 }
 
 #ifdef ENABLE_X509ALTUSERNAME
@@ -126,10 +125,48 @@ x509_get_username (char *cn, int cn_len,
 }
 
 char *
-x509_get_serial (x509_cert *cert, struct gc_arena *gc)
+backend_x509_get_serial (openvpn_x509_cert_t *cert, struct gc_arena *gc)
 {
   int ret = 0;
   int i = 0;
+  char *buf = NULL;
+  size_t buflen = 0;
+  mpi serial_mpi = { 0 };
+  int retval = 0;
+
+  /* Transform asn1 integer serial into PolarSSL MPI */
+  mpi_init(&serial_mpi);
+  retval = mpi_read_binary(&serial_mpi, cert->serial.p, cert->serial.len);
+  if (retval < 0)
+    {
+      char errbuf[128];
+      error_strerror(retval, errbuf, sizeof(errbuf));
+
+      msg(M_WARN, "Failed to retrieve serial from certificate: %s.", errbuf);
+      return NULL;
+    }
+
+  /* Determine decimal representation length, allocate buffer */
+  mpi_write_string(&serial_mpi, 10, buf, &buflen);
+  buf = gc_malloc(buflen, true, gc);
+
+  /* Write MPI serial as decimal string into buffer */
+  retval = mpi_write_string(&serial_mpi, 10, buf, &buflen);
+  if (retval < 0)
+    {
+      char errbuf[128];
+      error_strerror(retval, errbuf, sizeof(errbuf));
+
+      msg(M_WARN, "Failed to write serial to string: %s.", errbuf);
+      return NULL;
+    }
+
+  return buf;
+}
+
+char *
+backend_x509_get_serial_hex (openvpn_x509_cert_t *cert, struct gc_arena *gc)
+{
   char *buf = NULL;
   size_t len = cert->serial.len * 3 + 1;
 
@@ -343,7 +380,7 @@ x509_verify_cert_eku (x509_cert *cert, const char * const expected_oid)
 		}
 	    }
 
-	  if (0 == x509_oid_get_numeric_string( oid_num_str,
+	  if (0 < x509_oid_get_numeric_string( oid_num_str,
 	      sizeof (oid_num_str), oid))
 	    {
 	      msg (D_HANDSHAKE, "++ Certificate has EKU (oid) %s, expects %s",
@@ -377,9 +414,12 @@ x509_verify_crl(const char *crl_file, x509_cert *cert, const char *subject)
   result_t retval = FAILURE;
   x509_crl crl = {0};
 
-  if (x509parse_crlfile(&crl, crl_file) != 0)
+  int polar_retval = x509parse_crlfile(&crl, crl_file);
+  if (polar_retval != 0)
     {
-      msg (M_ERR, "CRL: cannot read CRL from file %s", crl_file);
+      char errstr[128];
+      error_strerror(polar_retval, errstr, sizeof(errstr));
+      msg (M_WARN, "CRL: cannot read CRL from file %s (%s)", crl_file, errstr);
       goto end;
     }
 

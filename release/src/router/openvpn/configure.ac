@@ -32,7 +32,7 @@ m4_include(compat.m4)
 AC_DEFINE([OPENVPN_VERSION_RESOURCE], [PRODUCT_VERSION_RESOURCE], [Version in windows resource format])
 
 AC_CONFIG_AUX_DIR([.])
-AM_CONFIG_HEADER([config.h])
+AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_SRCDIR([src/openvpn/syshead.h])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE
@@ -58,6 +58,13 @@ AC_ARG_ENABLE(
 	[AS_HELP_STRING([--disable-crypto], [disable crypto support @<:@default=yes@:>@])],
 	,
 	[enable_crypto="yes"]
+)
+
+AC_ARG_ENABLE(
+	[ofb-cfb],
+	[AS_HELP_STRING([--enable-ofb-cfb], [enable support for OFB and CFB cipher modes @<:@default=yes@:>@])],
+	,
+	[enable_crypto_ofb_cfb="yes"]
 )
 
 AC_ARG_ENABLE(
@@ -93,13 +100,6 @@ AC_ARG_ENABLE(
 	[AS_HELP_STRING([--disable-plugins], [disable plug-in support @<:@default=yes@:>@])],
 	,
 	[enable_plugins="yes"]
-)
-
-AC_ARG_ENABLE(
-	[eurephia],
-	[AS_HELP_STRING([--disable-eurephia], [disable support for the eurephia plug-in @<:@default=yes@:>@])],
-	,
-	[enable_eurephia="yes"]
 )
 
 AC_ARG_ENABLE(
@@ -357,15 +357,18 @@ AC_ARG_VAR([IPROUTE], [full path to ip utility])
 AC_ARG_VAR([NETSTAT], [path to netstat utility]) # tests
 AC_ARG_VAR([MAN2HTML], [path to man2html utility])
 AC_ARG_VAR([GIT], [path to git utility])
+AC_ARG_VAR([SYSTEMD_ASK_PASSWORD], [path to systemd-ask-password utility])
 AC_PATH_PROGS([IFCONFIG], [ifconfig],, [$PATH:/usr/local/sbin:/usr/sbin:/sbin])
 AC_PATH_PROGS([ROUTE], [route],, [$PATH:/usr/local/sbin:/usr/sbin:/sbin])
 AC_PATH_PROGS([IPROUTE], [ip],, [$PATH:/usr/local/sbin:/usr/sbin:/sbin])
+AC_PATH_PROGS([SYSTEMD_ASK_PASSWORD], [systemd-ask-password],, [$PATH:/usr/local/bin:/usr/bin:/bin])
 AC_CHECK_PROGS([NETSTAT], [netstat], [netstat], [$PATH:/usr/local/sbin:/usr/sbin:/sbin:/etc]) # tests
 AC_CHECK_PROGS([MAN2HTML], [man2html])
 AC_CHECK_PROGS([GIT], [git]) # optional
 AC_DEFINE_UNQUOTED([IFCONFIG_PATH], ["$IFCONFIG"], [Path to ifconfig tool])
 AC_DEFINE_UNQUOTED([IPROUTE_PATH], ["$IPROUTE"], [Path to iproute tool])
 AC_DEFINE_UNQUOTED([ROUTE_PATH], ["$ROUTE"], [Path to route tool])
+AC_DEFINE_UNQUOTED([SYSTEMD_ASK_PASSWORD_PATH], ["$SYSTEMD_ASK_PASSWORD"], [Path to systemd-ask-password tool])
 
 #
 # Libtool
@@ -454,7 +457,7 @@ SOCKET_INCLUDES="
 "
 
 AC_CHECK_HEADERS(
-	[net/if.h netinet/ip.h netinet/if_ether.h resolv.h sys/un.h],
+	[net/if.h netinet/ip.h netinet/if_ether.h resolv.h sys/un.h net/if_utun.h sys/kern_control.h],
 	,
 	,
 	[[${SOCKET_INCLUDES}]]
@@ -726,6 +729,13 @@ case "${with_mem_check}" in
 esac
 
 PKG_CHECK_MODULES(
+	[PKCS11_HELPER],
+	[libpkcs11-helper-1 >= 1.11],
+	[have_pkcs11_helper="yes"],
+	[]
+)
+
+PKG_CHECK_MODULES(
 	[OPENSSL_CRYPTO],
 	[libcrypto >= 0.9.6],
 	[have_openssl_crypto="yes"],
@@ -749,7 +759,9 @@ PKG_CHECK_MODULES(
 		[
 			have_openssl_ssl="yes"
 			OPENSSL_SSL_LIBS="-lssl"
-		]
+		],
+		[],
+		[-lcrypto]
 	)]
 )
 
@@ -789,9 +801,11 @@ if test -z "${POLARSSL_LIBS}"; then
 				[polarssl],
 				[aes_crypt_cbc],
 				,
-				[have_polarssl_crypto="no"]
+				[have_polarssl_crypto="no"],
+				[${PKCS11_HELPER_LIBS}]
 			)
-		]
+		],
+		[${PKCS11_HELPER_LIBS}]
 	)
 fi
 
@@ -805,15 +819,45 @@ if test "${with_crypto_library}" = "polarssl" ; then
 #include <polarssl/version.h>
 			]],
 			[[
-#if POLARSSL_VERSION_NUMBER < 0x01010000
+#if POLARSSL_VERSION_NUMBER < 0x01020A00 || POLARSSL_VERSION_NUMBER >= 0x01030000
 #error invalid version
 #endif
 			]]
 		)],
 		[AC_MSG_RESULT([ok])],
-		[AC_MSG_ERROR([invalid polarssl version])]
+		[AC_MSG_ERROR([PolarSSL 1.2.x required and must be 1.2.10 or later])]
 	)
+
+	polarssl_with_pkcs11="no"
+	AC_COMPILE_IFELSE(
+		[AC_LANG_PROGRAM(
+			[[
+#include <polarssl/config.h>
+			]],
+			[[
+#ifndef POLARSSL_PKCS11_C
+#error pkcs11 wrapper missing
+#endif
+			]]
+		)],
+		polarssl_with_pkcs11="yes")
 	CFLAGS="${old_CFLAGS}"
+
+	AC_MSG_CHECKING([polarssl pkcs11 support])
+	if test "${enable_pkcs11}" = "yes"; then
+		if test "${polarssl_with_pkcs11}" = "yes"; then
+			AC_MSG_RESULT([ok])
+		else
+			AC_MSG_ERROR([polarssl has no pkcs11 wrapper compiled in])
+		fi
+	else
+		if test "${polarssl_with_pkcs11}" != "yes"; then
+			AC_MSG_RESULT([ok])
+		else
+			AC_MSG_ERROR([PolarSSL compiled with PKCS11, while OpenVPN is not])
+		fi
+	fi
+
 fi
 
 AC_ARG_VAR([LZO_CFLAGS], [C compiler flags for lzo])
@@ -856,12 +900,30 @@ if test "${have_lzo}" = "yes"; then
 	CFLAGS="${saved_CFLAGS}"
 fi
 
-PKG_CHECK_MODULES(
-	[PKCS11_HELPER],
-	[libpkcs11-helper-1 >= 1.02],
-	[have_pkcs11_helper="yes"],
-	[]
-)
+
+dnl
+dnl Check for systemd
+dnl
+
+if test "$enable_systemd" = "yes" ; then
+    PKG_CHECK_MODULES([libsystemd], [systemd libsystemd],
+                      [],
+                      [PKG_CHECK_MODULES([libsystemd], [libsystemd-daemon])]
+                      )
+    AC_CHECK_HEADERS(systemd/sd-daemon.h,
+       ,
+       [
+	   AC_MSG_ERROR([systemd development headers not found.])
+       ])
+
+    saved_LIBS="${LIBS}"
+    LIBS="${LIBS} ${libsystemd_LIBS}"
+    AC_CHECK_FUNCS([sd_booted], [], [AC_MSG_ERROR([systemd library is missing sd_booted()])])
+    OPTIONAL_SYSTEMD_LIBS="${libsystemd_LIBS}"
+    AC_DEFINE(ENABLE_SYSTEMD, 1, [Enable systemd integration])
+    LIBS="${saved_LIBS}"
+fi
+
 
 AC_MSG_CHECKING([git checkout])
 GIT_CHECKOUT="no"
@@ -903,7 +965,6 @@ test "${enable_def_auth}" = "yes" && AC_DEFINE([ENABLE_DEF_AUTH], [1], [Enable d
 test "${enable_pf}" = "yes" && AC_DEFINE([ENABLE_PF], [1], [Enable internal packet filter])
 test "${enable_strict_options}" = "yes" && AC_DEFINE([ENABLE_STRICT_OPTIONS_CHECK], [1], [Enable strict options check between peers])
 test "${enable_password_save}" = "yes" && AC_DEFINE([ENABLE_PASSWORD_SAVE], [1], [Allow --askpass and --auth-user-pass passwords to be read from a file])
-test "${enable_systemd}" = "yes" && AC_DEFINE([ENABLE_SYSTEMD], [1], [Enable systemd support])
 
 case "${with_crypto_library}" in
 	openssl)
@@ -935,6 +996,7 @@ fi
 
 if test "${enable_crypto}" = "yes"; then
 	test "${have_crypto_crypto}" != "yes" && AC_MSG_ERROR([${with_crypto_library} crypto is required but missing])
+	test "${enable_crypto_ofb_cfb}" = "yes" && AC_DEFINE([ENABLE_OFB_CFB_MODE], [1], [Enable OFB and CFB cipher modes])
 	OPTIONAL_CRYPTO_CFLAGS="${OPTIONAL_CRYPTO_CFLAGS} ${CRYPTO_CRYPTO_CFLAGS}"
 	OPTIONAL_CRYPTO_LIBS="${OPTIONAL_CRYPTO_LIBS} ${CRYPTO_CRYPTO_LIBS}"
 	AC_DEFINE([ENABLE_CRYPTO], [1], [Enable crypto library])
@@ -942,8 +1004,7 @@ fi
 
 if test "${enable_plugins}" = "yes"; then
 	OPTIONAL_DL_LIBS="${DL_LIBS}"
-	AC_DEFINE([ENABLE_PLUGIN], [1], [Enable systemd support])
-	test "${enable_eurephia}" = "yes" && AC_DEFINE([ENABLE_EUREPHIA], [1], [Enable support for the eurephia plug-in])
+	AC_DEFINE([ENABLE_PLUGIN], [1], [Enable plug-in support])
 else
 	enable_plugin_auth_pam="no"
 	enable_plugin_down_root="no"
@@ -1028,6 +1089,7 @@ AC_SUBST([OPTIONAL_CRYPTO_CFLAGS])
 AC_SUBST([OPTIONAL_CRYPTO_LIBS])
 AC_SUBST([OPTIONAL_LZO_CFLAGS])
 AC_SUBST([OPTIONAL_LZO_LIBS])
+AC_SUBST([OPTIONAL_SYSTEMD_LIBS])
 AC_SUBST([OPTIONAL_PKCS11_HELPER_CFLAGS])
 AC_SUBST([OPTIONAL_PKCS11_HELPER_LIBS])
 

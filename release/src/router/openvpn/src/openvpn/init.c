@@ -183,10 +183,12 @@ ce_management_query_proxy (struct context *c)
   if (management)
     {
       gc = gc_new ();
-      struct buffer out = alloc_buf_gc (256, &gc);
-      buf_printf (&out, ">PROXY:%u,%s,%s", (l ? l->current : 0) + 1,
-                  (proto_is_udp (ce->proto) ? "UDP" : "TCP"), np (ce->remote));
-      management_notify_generic (management, BSTR (&out));
+      {
+	struct buffer out = alloc_buf_gc (256, &gc);
+	buf_printf (&out, ">PROXY:%u,%s,%s", (l ? l->current : 0) + 1,
+		    (proto_is_udp (ce->proto) ? "UDP" : "TCP"), np (ce->remote));
+	management_notify_generic (management, BSTR (&out));
+      }
       ce->flags |= CE_MAN_QUERY_PROXY;
       while (ce->flags & CE_MAN_QUERY_PROXY)
         {
@@ -866,7 +868,7 @@ print_openssl_info (const struct options *options)
 	show_available_engines ();
 #ifdef ENABLE_SSL
       if (options->show_tls_ciphers)
-	show_available_tls_ciphers ();
+	show_available_tls_ciphers (options->cipher_list);
 #endif
       return true;
     }
@@ -1145,13 +1147,14 @@ do_init_traffic_shaper (struct context *c)
 }
 
 /*
- * Allocate a route list structure if at least one
- * --route option was specified.
+ * Allocate route list structures for IPv4 and IPv6
+ * (we do this for IPv4 even if no --route option has been seen, as other
+ * parts of OpenVPN might want to fill the route-list with info, e.g. DHCP)
  */
 static void
 do_alloc_route_list (struct context *c)
 {
-  if (c->options.routes && !c->c1.route_list)
+  if (!c->c1.route_list)
     c->c1.route_list = new_route_list (c->options.max_routes, &c->gc);
   if (c->options.routes_ipv6 && !c->c1.route_ipv6_list)
     c->c1.route_ipv6_list = new_route_ipv6_list (c->options.max_routes, &c->gc);
@@ -1708,7 +1711,8 @@ pull_permission_mask (const struct context *c)
     | OPT_P_MESSAGES
     | OPT_P_EXPLICIT_NOTIFY
     | OPT_P_ECHO
-    | OPT_P_PULL_MODE;
+    | OPT_P_PULL_MODE
+    | OPT_P_PEER_ID;
 
   if (!c->options.route_nopull)
     flags |= (OPT_P_ROUTE | OPT_P_IPWIN32);
@@ -1787,6 +1791,15 @@ do_deferred_options (struct context *c, const unsigned int found)
     msg (D_PUSH, "OPTIONS IMPORT: --ip-win32 and/or --dhcp-option options modified");
   if (found & OPT_P_SETENV)
     msg (D_PUSH, "OPTIONS IMPORT: environment modified");
+
+#ifdef ENABLE_SSL
+  if (found & OPT_P_PEER_ID)
+    {
+      msg (D_PUSH, "OPTIONS IMPORT: peer-id set");
+      c->c2.tls_multi->use_peer_id = true;
+      c->c2.tls_multi->peer_id = c->options.peer_id;
+    }
+#endif
 }
 
 /*
@@ -2158,7 +2171,7 @@ do_init_crypto_tls (struct context *c, const unsigned int flags)
 			       options->use_iv);
 
   /* In short form, unique datagram identifier is 32 bits, in long form 64 bits */
-  packet_id_long_form = cfb_ofb_mode (&c->c1.ks.key_type);
+  packet_id_long_form = cipher_kt_mode_ofb_cfb (c->c1.ks.key_type.cipher);
 
   /* Compute MTU parameters */
   crypto_adjust_frame_parameters (&c->c2.frame,
@@ -2191,7 +2204,12 @@ do_init_crypto_tls (struct context *c, const unsigned int flags)
   to.renegotiate_seconds = options->renegotiate_seconds;
   to.single_session = options->single_session;
 #ifdef ENABLE_PUSH_PEER_INFO
-  to.push_peer_info = options->push_peer_info;
+  if (options->push_peer_info)		/* all there is */
+    to.push_peer_info_detail = 2;
+  else if (options->pull)		/* pull clients send some details */
+    to.push_peer_info_detail = 1;
+  else					/* default: no peer-info at all */
+    to.push_peer_info_detail = 0;
 #endif
 
   /* should we not xmit any packets until we get an initial
@@ -2205,7 +2223,8 @@ do_init_crypto_tls (struct context *c, const unsigned int flags)
 
   to.verify_command = options->tls_verify;
   to.verify_export_cert = options->tls_export_cert;
-  to.verify_x509name = options->tls_remote;
+  to.verify_x509_type = (options->verify_x509_type & 0xff);
+  to.verify_x509_name = options->verify_x509_name;
   to.crl_file = options->crl_file;
   to.ssl_flags = options->ssl_flags;
   to.ns_cert_type = options->ns_cert_type;
@@ -2467,12 +2486,10 @@ do_option_warnings (struct context *c)
     warn_on_use_of_common_subnets ();
   if (o->tls_client
       && !o->tls_verify
-      && !o->tls_remote
+      && o->verify_x509_type == VERIFY_X509_NONE
       && !(o->ns_cert_type & NS_CERT_CHECK_SERVER)
       && !o->remote_cert_eku)
     msg (M_WARN, "WARNING: No server certificate verification method has been enabled.  See http://openvpn.net/howto.html#mitm for more info.");
-  if (o->tls_remote)
-    msg (M_WARN, "WARNING: Make sure you understand the semantics of --tls-remote before using it (see the man page).");
 #endif
 #endif
 
@@ -2481,12 +2498,16 @@ do_option_warnings (struct context *c)
     msg (M_WARN, "NOTE: --connect-timeout option is not supported on this OS");
 #endif
 
-  if (script_security >= SSEC_SCRIPTS)
-    msg (M_WARN, "NOTE: the current --script-security setting may allow this configuration to call user-defined scripts");
-  else if (script_security >= SSEC_PW_ENV)
-    msg (M_WARN, "WARNING: the current --script-security setting may allow passwords to be passed to scripts via environmental variables");
-  else
-    msg (M_WARN, "NOTE: " PACKAGE_NAME " 2.1 requires '--script-security 2' or higher to call user-defined scripts or executables");
+  /* If a script is used, print appropiate warnings */
+  if (o->user_script_used)
+   {
+     if (script_security >= SSEC_SCRIPTS)
+       msg (M_WARN, "NOTE: the current --script-security setting may allow this configuration to call user-defined scripts");
+     else if (script_security >= SSEC_PW_ENV)
+       msg (M_WARN, "WARNING: the current --script-security setting may allow passwords to be passed to scripts via environmental variables");
+     else
+       msg (M_WARN, "NOTE: starting with " PACKAGE_NAME " 2.1, '--script-security 2' or higher is required to call user-defined scripts or executables");
+   }
 }
 
 static void
@@ -2964,7 +2985,7 @@ do_close_ifconfig_pool_persist (struct context *c)
 static void
 do_inherit_env (struct context *c, const struct env_set *src)
 {
-  c->c2.es = env_set_create (&c->c2.gc);
+  c->c2.es = env_set_create (NULL);
   c->c2.es_owned = true;
   env_set_inherit (c->c2.es, src);
 }

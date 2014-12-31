@@ -307,6 +307,10 @@
 #include <netinet/ip.h>
 #endif
 
+#ifdef HAVE_NETINET_TCP_H
+#include <netinet/tcp.h>
+#endif
+
 #ifdef HAVE_NET_IF_TUN_H
 #include <net/if_tun.h>
 #endif
@@ -344,6 +348,14 @@
 #endif
 
 #endif /* TARGET_DRAGONFLY */
+
+#ifdef TARGET_DARWIN
+
+#ifdef HAVE_NETINET_TCP_H
+#include <netinet/tcp.h>
+#endif
+
+#endif /* TARGET_DARWIN */
 
 #ifdef WIN32
 #include <iphlpapi.h>
@@ -392,6 +404,13 @@
  */
 #if defined(HAVE_GETTIMEOFDAY) || defined(WIN32)
 #define HAVE_GETTIMEOFDAY_NANOSECONDS 1
+#endif
+
+/*
+ * do we have the MIN() macro?
+ */
+#ifndef MIN
+#define MIN(a,b) (((a)<(b))?(a):(b))
 #endif
 
 /*
@@ -535,7 +554,7 @@ socket_defined (const socket_descriptor_t sd)
 /*
  * Enable external private key
  */
-#if defined(ENABLE_MANAGEMENT) && defined(ENABLE_SSL) && !defined(ENABLE_CRYPTO_POLARSSL)
+#if defined(ENABLE_MANAGEMENT) && defined(ENABLE_SSL)
 #define MANAGMENT_EXTERNAL_KEY
 #endif
 

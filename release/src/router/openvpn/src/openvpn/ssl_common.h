@@ -233,7 +233,7 @@ struct tls_options
   bool disable_occ;
 #endif
 #ifdef ENABLE_PUSH_PEER_INFO
-  bool push_peer_info;
+  int push_peer_info_detail;
 #endif
   int transition_window;
   int handshake_window;
@@ -245,7 +245,8 @@ struct tls_options
   /* cert verification parms */
   const char *verify_command;
   const char *verify_export_cert;
-  const char *verify_x509name;
+  int verify_x509_type;
+  const char *verify_x509_name;
   const char *crl_file;
   int ns_cert_type;
   unsigned remote_cert_ku[MAX_PARMS];
@@ -284,12 +285,16 @@ struct tls_options
   struct env_set *es;
   const struct plugin_list *plugins;
 
-  /* configuration file boolean options */
+  /* configuration file SSL-related boolean and low-permutation options */
 # define SSLF_CLIENT_CERT_NOT_REQUIRED (1<<0)
 # define SSLF_USERNAME_AS_COMMON_NAME  (1<<1)
 # define SSLF_AUTH_USER_PASS_OPTIONAL  (1<<2)
 # define SSLF_OPT_VERIFY               (1<<4)
 # define SSLF_CRL_VERIFY_DIR           (1<<5)
+# define SSLF_TLS_VERSION_MIN_SHIFT    6
+# define SSLF_TLS_VERSION_MIN_MASK     0xF /* (uses bit positions 6 to 9) */
+# define SSLF_TLS_VERSION_MAX_SHIFT    10
+# define SSLF_TLS_VERSION_MAX_MASK     0xF /* (uses bit positions 10 to 13) */
   unsigned int ssl_flags;
 
 #ifdef MANAGEMENT_DEF_AUTH
@@ -484,6 +489,10 @@ struct tls_multi
   /* Time of last call to tls_authentication_status */
   time_t tas_last;
 #endif
+
+  /* For P_DATA_V2 */
+  uint32_t peer_id;
+  bool use_peer_id;
 
   /*
    * Our session objects.

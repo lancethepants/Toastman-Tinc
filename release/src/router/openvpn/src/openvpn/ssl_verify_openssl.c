@@ -97,9 +97,7 @@ static
 bool extract_x509_extension(X509 *cert, char *fieldname, char *out, int size)
 {
   bool retval = false;
-  X509_EXTENSION *pExt;
   char *buf = 0;
-  int length = 0;
   GENERAL_NAMES *extensions;
   int nid = OBJ_txt2nid(fieldname);
 
@@ -220,7 +218,7 @@ x509_get_username (char *common_name, int cn_len,
 }
 
 char *
-x509_get_serial (openvpn_x509_cert_t *cert, struct gc_arena *gc)
+backend_x509_get_serial (openvpn_x509_cert_t *cert, struct gc_arena *gc)
 {
   ASN1_INTEGER *asn1_i;
   BIGNUM *bignum;
@@ -238,10 +236,18 @@ x509_get_serial (openvpn_x509_cert_t *cert, struct gc_arena *gc)
   return serial;
 }
 
+char *
+backend_x509_get_serial_hex (openvpn_x509_cert_t *cert, struct gc_arena *gc)
+{
+  const ASN1_INTEGER *asn1_i = X509_get_serialNumber(cert);
+
+  return format_hex_ex(asn1_i->data, asn1_i->length, 0, 1, ":", gc);
+}
+
 unsigned char *
 x509_get_sha1_hash (X509 *cert, struct gc_arena *gc)
 {
-  char *hash = gc_malloc(SHA_DIGEST_LENGTH, false, gc);
+  unsigned char *hash = gc_malloc(SHA_DIGEST_LENGTH, false, gc);
   memcpy(hash, cert->sha1_hash, SHA_DIGEST_LENGTH);
   return hash;
 }
@@ -583,12 +589,12 @@ x509_verify_crl(const char *crl_file, X509 *peer_cert, const char *subject)
   in = BIO_new_file (crl_file, "r");
 
   if (in == NULL) {
-    msg (M_ERR, "CRL: cannot read: %s", crl_file);
+    msg (M_WARN, "CRL: cannot read: %s", crl_file);
     goto end;
   }
   crl=PEM_read_bio_X509_CRL(in,NULL,NULL,NULL);
   if (crl == NULL) {
-    msg (M_ERR, "CRL: cannot read CRL from file %s", crl_file);
+    msg (M_WARN, "CRL: cannot read CRL from file %s", crl_file);
     goto end;
   }
 

@@ -181,6 +181,9 @@ struct tuntap
   int ip_fd;
 #endif
 
+#ifdef HAVE_NET_IF_UTUN_H
+  bool is_utun;
+#endif
   /* used for printing status info only */
   unsigned int rwflags_debug;
 
@@ -202,8 +205,6 @@ tuntap_defined (const struct tuntap *tt)
 /*
  * Function prototypes
  */
-
-static void clear_tuntap (struct tuntap *tuntap);
 
 void open_tun (const char *dev, const char *dev_type, const char *dev_node,
 	       struct tuntap *tt);
@@ -373,6 +374,19 @@ tuntap_stop (int status)
   return false;
 }
 
+static inline bool
+tuntap_abort(int status)
+{
+  /*
+   * Typically generated when driver is halted.
+   */
+  if (status < 0)
+    {
+      return openvpn_errno() == ERROR_OPERATION_ABORTED;
+    }
+  return false;
+}
+
 static inline int
 tun_write_win32 (struct tuntap *tt, struct buffer *buf)
 {
@@ -410,6 +424,12 @@ write_tun_buffered (struct tuntap *tt, struct buffer *buf)
 
 static inline bool
 tuntap_stop (int status)
+{
+  return false;
+}
+
+static inline bool
+tuntap_abort(int status)
 {
   return false;
 }
